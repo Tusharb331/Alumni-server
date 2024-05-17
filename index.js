@@ -1,7 +1,10 @@
 import express from "express";
 import cors from "cors";
 import { adminRouter } from "./Routes/AdminRoutes.js";
+import dotenv from "dotenv";
 
+
+dotenv.config();
 
 const app = express();
 
@@ -17,7 +20,8 @@ app.use("/auth", adminRouter);
 // app.use(express.static('Public'));
 app.use('/Public', express.static('Public'));
 
-app.listen(3000, () => {
-    console.log("server is running")
-})
+const PORT = process.env.PORT || 3000;
 
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
