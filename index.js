@@ -9,8 +9,7 @@ dotenv.config();
 const app = express();
 
 app.use(cors({
-    // origin: ['http://localhost:5173'],
-    origin: ['https://alumni-client.vercel.app/'],
+    origin: ['http://localhost:5173', 'https://alumni-client.vercel.app'],
     methods: ['GET,HEAD,PUT,PATCH,POST,DELETE'],
     credentials: true,
 }));
@@ -18,7 +17,6 @@ app.use(cors({
 app.use(express.json())
 
 app.use("/auth", adminRouter);
-// app.use(express.static('Public'));
 app.use('/Public', express.static('Public'));
 
 const PORT = process.env.PORT || 3000;
