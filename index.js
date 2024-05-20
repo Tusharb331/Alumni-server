@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import { adminRouter } from "./Routes/AdminRoutes.js";
 import dotenv from "dotenv";
+import db from "./utils/db.js";
 
 
 dotenv.config();
