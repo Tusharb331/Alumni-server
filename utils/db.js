@@ -8,7 +8,7 @@ const con = mysql.createConnection({
     user: process.env.USER,
     password: process.env.PASSWORD,
     database: process.env.NAME,
-    // port: process.env.DB_PORT 
+    port: process.env.DB_PORT 
 })
 // port: process.env.PORT remove port to run offline 
 
