@@ -668,7 +668,7 @@ router.get("/up_events", (req, res) => {
     con.query(sql, (err, result) => {
         if (err){
             console.log("Database Query Error:", err);
-            return res.json({err})
+            return res.json({Error: `DB Query Error ${err}`})
             // return res.json({ Error: "DB Query Error" , })
         } 
         if (result.length > 0) {
