@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import { adminRouter } from "./Routes/AdminRoutes.js";
 import dotenv from "dotenv";
-import "./utils/db.js";
+// import "./utils/db.js";
 
 
 dotenv.config();
@@ -10,7 +10,7 @@ dotenv.config();
 const app = express();
 
 app.use(cors({
-    origin: ['http://localhost:5173', 'https://alumni-client.vercel.app'],
+    origin: ['http://localhost:5173','https://alumni-client.vercel.app/'],
     methods: ['GET,HEAD,PUT,PATCH,POST,DELETE'],
     credentials: true,
 }));
