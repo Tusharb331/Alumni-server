@@ -3,21 +3,15 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+
 const con = mysql.createConnection({
-    host: viaduct.proxy.rlwy.net,
-    user: root,
-    password: FUzoZHXzcynVTyyBJBphvasRYRaaKjuV,
-    database: railway,
-    // port: 26170
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    port: process.env.DB_PORT 
 })
-// const con = mysql.createConnection({
-//     host: process.env.DB_HOST,
-//     user: process.env.DB_USER,
-//     password: process.env.DB_PASSWORD,
-//     database: process.env.DB_NAME,
-//     port: process.env.DB_PORT 
-// })
-// port: process.env.PORT remove port to run offline -junaid 
+// port: process.env.PORT remove port to run offline on xampp
 
 con.connect((err) => {
     if (err) {
