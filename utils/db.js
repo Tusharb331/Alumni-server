@@ -10,7 +10,7 @@ const con = mysql.createConnection({
     database: process.env.DB_NAME,
     port: process.env.DB_PORT 
 })
-// port: process.env.PORT remove port to run offline 
+// port: process.env.PORT remove port to run offline -junaid 
 
 con.connect((err) => {
     if (err) {
