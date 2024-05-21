@@ -666,7 +666,10 @@ router.get("/settings", (req, res) => {
 router.get("/up_events", (req, res) => {
     const sql = `SELECT * FROM events WHERE schedule >= CURDATE() ORDER BY schedule ASC`;
     con.query(sql, (err, result) => {
-        if (err) return res.json({ Error: "Query Error" })
+        if (err){
+            console.error("Database Query Error:", err);
+            return res.json({ Error: "DB Query Error" })
+        } 
         if (result.length > 0) {
             return res.json(result);
         } else {
