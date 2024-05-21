@@ -22,6 +22,11 @@ app.options('*', cors({
 
 app.use(express.json());
 
+
+app.get("/", (req, res) => {
+    res.send("Hello from Alumni Server!");
+});
+
 app.use("/auth", adminRouter);
 app.use('/Public', express.static('Public'));
 
