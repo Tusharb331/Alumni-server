@@ -8,7 +8,7 @@ const con = mysql.createConnection({
     user: root,
     password: FUzoZHXzcynVTyyBJBphvasRYRaaKjuV,
     database: railway,
-    port: 26170
+    // port: 26170
 })
 // const con = mysql.createConnection({
 //     host: process.env.DB_HOST,
