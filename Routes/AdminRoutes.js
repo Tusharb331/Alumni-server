@@ -1,6 +1,6 @@
 // Routes/AdminRoutes.js
 import express from "express";
-
+import con from "../utils/db.js";
 const adminRouter = express.Router();
 
 // Middleware to log requests
