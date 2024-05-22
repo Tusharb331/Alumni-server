@@ -840,9 +840,8 @@
 
 
 // export { router as adminRouter }
-
 import express from "express";
-import pool from "../utils/db.js"; // Import the modified db.js file
+import pool from "../utils/db.js";
 import jwt from "jsonwebtoken";
 import multer from "multer";
 import path from "path";
@@ -850,60 +849,364 @@ import bcrypt from "bcrypt";
 
 const router = express.Router();
 
-router.get("/users", async (req, res) => {
-    try {
-        const [rows, fields] = await pool.query("SELECT * FROM users ORDER BY name ASC");
-        if (rows.length > 0) {
-            res.json(rows);
-        } else {
-            res.json({ message: "No User Available" });
-        }
-    } catch (err) {
-        console.error("Query Error:", err);
-        res.status(500).json({ error: "Internal Server Error" });
+const avatarStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'Public/Avatar');
+    },
+    filename: (req, file, cb) => {
+        cb(null, file.fieldname + '_' + Date.now() + path.extname(file.originalname));
     }
 });
 
-router.get("/settings", async (req, res) => {
-    try {
-        const [rows, fields] = await pool.query("SELECT * FROM system_settings");
-        if (rows.length > 0) {
-            res.json(rows);
-        } else {
-            res.json({ message: "No Data Available" });
-        }
-    } catch (err) {
-        console.error("Query Error:", err);
-        res.status(500).json({ error: "Internal Server Error" });
+const avatarUpload = multer({ storage: avatarStorage });
+
+const galleryStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'Public/Images');
+    },
+    filename: (req, file, cb) => {
+        cb(null, file.originalname);
     }
 });
 
-router.get("/up_events", async (req, res) => {
+const galleryUpload = multer({ storage: galleryStorage });
+
+router.post("/login", async (req, res) => {
+    const sql = "SELECT * FROM users WHERE email = ?";
     try {
-        const [rows, fields] = await pool.query("SELECT * FROM events WHERE schedule >= CURDATE() ORDER BY schedule ASC");
-        if (rows.length > 0) {
-            res.json(rows);
+        const [result] = await pool.execute(sql, [req.body.email]);
+        if (result.length > 0) {
+            const match = await bcrypt.compare(req.body.password, result[0].password);
+            if (match) {
+                const email = result[0].email;
+                const token = jwt.sign({ role: "admin", email: email }, "jwt_csalumni_key", { expiresIn: "1d" });
+                res.cookie('token', token);
+                return res.json({ loginStatus: true, userType: result[0].type, userId: result[0].id, userName: result[0].name, alumnus_id: result[0].alumnus_id });
+            } else {
+                return res.json({ loginStatus: false, Error: "Wrong Email or Password" });
+            }
         } else {
-            res.json({ message: "Still there are no upcoming Events" });
+            return res.json({ loginStatus: false, Error: "Wrong Email or Password" });
         }
     } catch (err) {
-        console.error("Query Error:", err);
-        res.status(500).json({ error: "Internal Server Error" });
+        return res.json({ loginStatus: false, Error: "Query Error" });
     }
 });
 
-router.get("/alumni_list", async (req, res) => {
+router.post("/signup", async (req, res) => {
+    const { name, email, password, userType, course_id } = req.body;
     try {
-        const [rows, fields] = await pool.query("SELECT a.*, c.course, a.name AS name FROM alumnus_bio a INNER JOIN courses c ON c.id = a.course_id ORDER BY a.name ASC");
-        if (rows.length > 0) {
-            res.json(rows);
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const sql = "SELECT * FROM users WHERE email = ?";
+        const [result] = await pool.execute(sql, [email]);
+
+        if (result.length > 0) {
+            return res.json({ email: result[0].email });
         } else {
-            res.json({ message: "No Alumni available" });
+            if (userType === "alumnus") {
+                const alumnusSql = "INSERT INTO alumnus_bio (name, email, course_id) VALUES (?, ?, ?)";
+                const [alumnusResult] = await pool.execute(alumnusSql, [name, email, course_id]);
+
+                const alumnusId = alumnusResult.insertId;
+                const userSql = "INSERT INTO users (name, email, password, type, alumnus_id) VALUES (?, ?, ?, ?, ?)";
+                const [userResult] = await pool.execute(userSql, [name, email, hashedPassword, userType, alumnusId]);
+
+                return res.json({ message: 'Signup Successful', userId: userResult.insertId, signupStatus: true });
+            } else {
+                const userSql = "INSERT INTO users (name, email, password, type) VALUES (?, ?, ?, ?)";
+                const [userResult] = await pool.execute(userSql, [name, email, hashedPassword, userType]);
+
+                return res.json({ message: 'Signup Successful', userId: userResult.insertId, signupStatus: true });
+            }
         }
-    } catch (err) {
-        console.error("Query Error:", err);
-        res.status(500).json({ error: "Internal Server Error" });
+    } catch (error) {
+        console.error("Error hashing password:", error);
+        return res.status(500).json({ error: "Password Hashing Error", signupStatus: false });
     }
 });
 
-export { router as adminRouter };
+router.post("/logout", (req, res) => {
+    res.clearCookie('token');
+    res.status(200).json({ message: 'Logout Success' });
+});
+
+router.get("/counts", async (req, res) => {
+    const sql = `
+        SELECT
+            (SELECT COUNT(*) FROM forum_topics) AS forumCount,
+            (SELECT COUNT(*) FROM careers) AS jobCount,
+            (SELECT COUNT(*) FROM events) AS eventCount,
+            (SELECT COUNT(*) FROM events WHERE schedule >= CURDATE()) AS upeventCount,
+            (SELECT COUNT(*) FROM alumnus_bio) AS alumniCount;
+    `;
+    try {
+        const [result] = await pool.query(sql);
+        const counts = {
+            forums: result[0].forumCount,
+            jobs: result[0].jobCount,
+            events: result[0].eventCount,
+            upevents: result[0].upeventCount,
+            alumni: result[0].alumniCount
+        };
+        res.json(counts);
+    } catch (err) {
+        console.error("Error executing SQL query:", err);
+        return res.status(500).json({ error: "Query Error" });
+    }
+});
+
+router.get('/jobs', async (req, res) => {
+    const sql = `
+        SELECT careers.*, users.name
+        FROM careers
+        INNER JOIN users ON careers.user_id = users.id
+        ORDER BY careers.id DESC
+    `;
+    try {
+        const [result] = await pool.query(sql);
+        res.json(result);
+    } catch (err) {
+        console.error('Error executing SQL query:', err);
+        return res.status(500).json({ error: 'Query Error' });
+    }
+});
+
+router.post('/managejob', async (req, res) => {
+    const { company, job_title, location, description, user_id } = req.body;
+    const sql = 'INSERT INTO careers (company, job_title, location, description, user_id) VALUES (?, ?, ?, ?, ?)';
+    try {
+        const [result] = await pool.execute(sql, [company, job_title, location, description, user_id]);
+        return res.json({ message: 'New job added successfully', jobId: result.insertId });
+    } catch (err) {
+        console.error('Error executing SQL query:', err);
+        return res.status(500).json({ error: 'Database Error' });
+    }
+});
+
+router.put('/managejob', async (req, res) => {
+    const { id, company, job_title, location, description } = req.body;
+    if (id) {
+        const sql = 'UPDATE careers SET company=?, job_title=?, location=?, description=? WHERE id=?';
+        try {
+            await pool.execute(sql, [company, job_title, location, description, id]);
+            return res.json({ message: 'Job updated successfully' });
+        } catch (err) {
+            console.error('Error executing SQL query:', err);
+            return res.status(500).json({ error: 'Database Error' });
+        }
+    } else {
+        return res.status(400).json({ error: 'Invalid Request: No ID provided for update' });
+    }
+});
+
+router.delete('/jobs/:id', async (req, res) => {
+    const jid = req.params.id;
+    const sql = 'DELETE FROM careers WHERE id = ?';
+    try {
+        await pool.execute(sql, [jid]);
+        return res.json({ message: 'Job deleted successfully' });
+    } catch (err) {
+        console.error("Error executing SQL query:", err);
+        return res.status(500).json({ error: "Query Error" });
+    }
+});
+
+router.get('/courses', async (req, res) => {
+    const sql = "SELECT * FROM courses";
+    try {
+        const [result] = await pool.query(sql);
+        return res.json(result);
+    } catch (err) {
+        return res.json({ Error: "Query Error" });
+    }
+});
+
+router.delete('/courses/:id', async (req, res) => {
+    const sql = 'DELETE FROM courses WHERE id = ?';
+    try {
+        await pool.execute(sql, [req.params.id]);
+        return res.json({ message: 'Course deleted successfully' });
+    } catch (err) {
+        return res.json({ Error: "Query Error" });
+    }
+});
+
+router.post("/courses", async (req, res) => {
+    const sql = "INSERT INTO courses(course) VALUES(?)";
+    try {
+        const [result] = await pool.execute(sql, [req.body.course]);
+        return res.json(result.insertId);
+    } catch (err) {
+        console.error('Error executing SQL query:', err);
+        return res.json({ Error: "Query Error" });
+    }
+});
+
+router.put('/courses', async (req, res) => {
+    const { id, course } = req.body;
+    if (id) {
+        const sql = 'UPDATE courses SET course=? WHERE id=?';
+        try {
+            await pool.execute(sql, [course, id]);
+            return res.json({ message: 'Course Updated Successfully' });
+        } catch (err) {
+            console.error('Error executing SQL query:', err);
+            return res.status(500).json({ error: 'Database Error' });
+        }
+    } else {
+        return res.status(400).json({ error: 'Invalid Request: No ID provided for update' });
+    }
+});
+
+router.get("/events", async (req, res) => {
+    const sql = "SELECT events.*, COUNT(event_commits.id) AS commits_count FROM events LEFT JOIN event_commits ON events.id = event_commits.event_id GROUP BY events.id ORDER BY events.schedule DESC";
+    try {
+        const [result] = await pool.query(sql);
+        return res.json(result);
+    } catch (err) {
+        console.error('Error executing SQL query:', err);
+        return res.status(500).json({ error: 'Database Error' });
+    }
+});
+
+router.post('/manageevents', async (req, res) => {
+    const { title, description, schedule, venue, type, user_id } = req.body;
+    const sql = 'INSERT INTO events (title, description, schedule, venue, type, user_id) VALUES (?, ?, ?, ?, ?, ?)';
+    try {
+        const [result] = await pool.execute(sql, [title, description, schedule, venue, type, user_id]);
+        return res.json({ message: 'New Event Added Successfully', eventId: result.insertId });
+    } catch (err) {
+        console.error('Error executing SQL query:', err);
+        return res.status(500).json({ error: 'Database Error' });
+    }
+});
+
+router.put('/manageevents', async (req, res) => {
+    const { id, title, description, schedule, venue, type } = req.body;
+    if (id) {
+        const sql = 'UPDATE events SET title=?, description=?, schedule=?, venue=?, type=? WHERE id=?';
+        try {
+            await pool.execute(sql, [title, description, schedule, venue, type, id]);
+            return res.json({ message: 'Event Updated Successfully' });
+        } catch (err) {
+            console.error('Error executing SQL query:', err);
+            return res.status(500).json({ error: 'Database Error' });
+        }
+    } else {
+        return res.status(400).json({ error: 'Invalid Request: No ID provided for update' });
+    }
+});
+
+router.delete('/events/:id', async (req, res) => {
+    const sql = 'DELETE FROM events WHERE id = ?';
+    try {
+        await pool.execute(sql, [req.params.id]);
+        return res.json({ message: 'Event Deleted Successfully' });
+    } catch (err) {
+        console.error("Error executing SQL query:", err);
+        return res.status(500).json({ error: "Query Error" });
+    }
+});
+
+router.get('/forums', async (req, res) => {
+    const sql = "SELECT forum_topics.*, users.name FROM forum_topics INNER JOIN users ON forum_topics.user_id = users.id ORDER BY forum_topics.id DESC";
+    try {
+        const [result] = await pool.query(sql);
+        res.json(result);
+    } catch (err) {
+        console.error('Error executing SQL query:', err);
+        return res.status(500).json({ error: 'Query Error' });
+    }
+});
+
+router.delete('/forums/:id', async (req, res) => {
+    const fid = req.params.id;
+    const sql = 'DELETE FROM forum_topics WHERE id = ?';
+    try {
+        await pool.execute(sql, [fid]);
+        return res.json({ message: 'Forum Topic Deleted Successfully' });
+    } catch (err) {
+        console.error("Error executing SQL query:", err);
+        return res.status(500).json({ error: "Query Error" });
+    }
+});
+
+router.post('/manageforum', async (req, res) => {
+    const { title, description, user_id } = req.body;
+    const sql = 'INSERT INTO forum_topics (title, description, user_id) VALUES (?, ?, ?)';
+    try {
+        const [result] = await pool.execute(sql, [title, description, user_id]);
+        return res.json({ message: 'New Forum Topic Added Successfully', forumId: result.insertId });
+    } catch (err) {
+        console.error('Error executing SQL query:', err);
+        return res.status(500).json({ error: 'Database Error' });
+    }
+});
+
+router.put('/manageforum', async (req, res) => {
+    const { id, title, description } = req.body;
+    if (id) {
+        const sql = 'UPDATE forum_topics SET title=?, description=? WHERE id=?';
+        try {
+            await pool.execute(sql, [title, description, id]);
+            return res.json({ message: 'Forum Topic Updated Successfully' });
+        } catch (err) {
+            console.error('Error executing SQL query:', err);
+            return res.status(500).json({ error: 'Database Error' });
+        }
+    } else {
+        return res.status(400).json({ error: 'Invalid Request: No ID provided for update' });
+    }
+});
+
+router.post('/uploadavatar', avatarUpload.single('avatar'), async (req, res) => {
+    const avatarPath = req.file.filename;
+    const id = req.body.id;
+    const sql = 'UPDATE users SET avatar=? WHERE id=?';
+    try {
+        await pool.execute(sql, [avatarPath, id]);
+        res.status(200).json({ message: 'Avatar uploaded successfully' });
+    } catch (err) {
+        console.error('Error executing SQL query:', err);
+        res.status(500).json({ error: 'Query Error' });
+    }
+});
+
+router.post('/uploadgallery', galleryUpload.single('image'), async (req, res) => {
+    const { title, description, schedule } = req.body;
+    const image = req.file.originalname;
+    const sql = 'INSERT INTO gallery (title, description, schedule, image) VALUES (?, ?, ?, ?)';
+    try {
+        await pool.execute(sql, [title, description, schedule, image]);
+        res.status(200).json({ message: 'Image uploaded successfully' });
+    } catch (err) {
+        console.error('Error executing SQL query:', err);
+        res.status(500).json({ error: 'Query Error' });
+    }
+});
+
+router.get('/gallery', async (req, res) => {
+    const sql = "SELECT * FROM gallery ORDER BY id DESC";
+    try {
+        const [result] = await pool.query(sql);
+        return res.json(result);
+    } catch (err) {
+        console.error('Error executing SQL query:', err);
+        return res.status(500).json({ error: 'Query Error' });
+    }
+});
+
+router.delete('/gallery/:id', async (req, res) => {
+    const gid = req.params.id;
+    const sql = 'DELETE FROM gallery WHERE id = ?';
+    try {
+        await pool.execute(sql, [gid]);
+        return res.json({ message: 'Gallery Image Deleted Successfully' });
+    } catch (err) {
+        console.error("Error executing SQL query:", err);
+        return res.status(500).json({ error: "Query Error" });
+    }
+});
+
+export default router;
