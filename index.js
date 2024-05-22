@@ -27,14 +27,28 @@ app.get("/", (req, res) => {
     res.send("Hello from Alumni Server!");
 });
 
+app.get("/test-db-connection", async (req, res) => {
+    con.query("SELECT 1", (err, result) => {
+        if (err) {
+            console.error("Database connection test failed:", err);
+            return res.status(500).json({ error: "Database connection failed", details: err.message });
+        }
+        res.send("Database connection successful!");
+    });
+});
+
+
 app.get("/events", (req, res) => {
     const sql = "SELECT events.*, COUNT(event_commits.id) AS commits_count FROM events LEFT JOIN event_commits ON events.id = event_commits.event_id GROUP BY events.id ORDER BY events.schedule DESC";
+
+    console.log("Executing SQL query:", sql);
 
     con.query(sql, (err, result) => {
         if (err) {
             console.error("Error executing SQL query:", err);
-            return res.status(500).json({ error: "Query Error" });
+            return res.status(500).json({ error: "Query Error", details: err.message });
         }
+        console.log("SQL query executed successfully, result:", result);
         return res.json(result);
     });
 });
