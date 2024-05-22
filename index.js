@@ -1,3 +1,4 @@
+// index.js
 import express from "express";
 import cors from "cors";
 import { adminRouter } from "./Routes/AdminRoutes.js";
@@ -22,9 +23,19 @@ app.options('*', cors({
 
 app.use(express.json());
 
-
 app.get("/", (req, res) => {
     res.send("Hello from Alumni Server!");
+});
+app.get("/events", (req, res) => {
+    const sql = "SELECT events.*, COUNT(event_commits.id) AS commits_count FROM events LEFT JOIN event_commits ON events.id = event_commits.event_id GROUP BY events.id ORDER BY events.schedule DESC";
+
+    con.query(sql, (err, result) => {
+        if (err) {
+            console.error("Error executing SQL query:", err);
+            return res.status(500).json({ error: "Query Error" });
+        }
+        return res.json(result);
+    });
 });
 
 app.use("/auth", adminRouter);
