@@ -1209,4 +1209,4 @@ router.delete('/gallery/:id', async (req, res) => {
     }
 });
 
-export default router;
+export { router as adminRouter };
