@@ -1,3 +1,4 @@
+// index.js
 import express from "express";
 import cors from "cors";
 import { adminRouter } from "./Routes/AdminRoutes.js";
@@ -21,7 +22,6 @@ app.options('*', cors({
 }));
 
 app.use(express.json());
-
 
 app.get("/", (req, res) => {
     res.send("Hello from Alumni Server!");
