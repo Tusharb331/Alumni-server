@@ -21,4 +21,5 @@ con.connect((err) => {
     }
 })
 
+
 export default con;

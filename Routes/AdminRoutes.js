@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import multer from "multer";
 import path from "path";
 import bcrypt from "bcrypt";
+import sendEmail from "../utils/mailer.js";
 
 const router = express.Router();
 
@@ -187,18 +188,19 @@ router.get('/jobs', (req, res) => {
 });
 
 
-router.post('/managejob', (req, res) => {
-    const { company, job_title, location, description, user_id } = req.body;
+// router.post('/managejob', (req, res) => {
+//     const { company, job_title, location, description, user_id } = req.body;
 
-    const sql = 'INSERT INTO careers (company, job_title, location, description,user_id) VALUES (?, ?, ?, ?,?)';
-    con.query(sql, [company, job_title, location, description, user_id], (err, result) => {
-        if (err) {
-            console.error('Error executing SQL query:', err);
-            return res.status(500).json({ error: 'Database Error' });
-        }
-        return res.json({ message: 'New job added successfully', jobId: result.insertId });
-    });
-});
+//     const sql = 'INSERT INTO careers (company, job_title, location, description,user_id) VALUES (?, ?, ?, ?,?)';
+//     con.query(sql, [company, job_title, location, description, user_id], (err, result) => {
+//         if (err) {
+//             console.error('Error executing SQL query:', err);
+//             return res.status(500).json({ error: 'Database Error' });
+//         }
+//         return res.json({ message: 'New job added successfully', jobId: result.insertId });
+//     });
+// });
+
 
 router.put('/managejob', (req, res) => {
     const { id, company, job_title, location, description } = req.body;
@@ -823,20 +825,48 @@ router.put('/upaccount', avatarUpload.single('image'), async (req, res) => {
 
 
 
-router.get("/alumnusdetails", (req, res) => {
-    const id = req.query.id;
-    const sql = "SELECT * from alumnus_bio Where id=?";
-    con.query(sql, [id], (err, result) => {
-        // console.log(result);
-        if (err) return res.json({ Error: "Query Error" })
-        if (result.length > 0) {
-            return res.json(result);
+
+const getAllStudentEmails = () => {
+    return new Promise((resolve, reject) => {
+      const sql = "SELECT email FROM alumnus_bio";
+      con.query(sql, (err, results) => {
+        if (err) {
+          reject(err);
         } else {
-            return res.json({ message: "No Data Available" })
+          const emails = results.map(row => row.email);
+          resolve(emails);
         }
+      });
     });
-});
-
-
+  };
+  
+  router.post('/managejob', async (req, res) => {
+    const { company, job_title, location, description, user_id } = req.body;
+    const sql = 'INSERT INTO careers (company, job_title, location, description, user_id) VALUES (?, ?, ?, ?, ?)';
+  
+    con.query(sql, [company, job_title, location, description, user_id], async (err, result) => {
+      if (err) {
+        console.error('Error executing SQL query:', err);
+        return res.status(500).json({ error: 'Database Error' });
+      }
+  
+      try {
+        const emails = await getAllStudentEmails();
+        const subject = `New Job Posted: ${job_title}`;
+        const html = `A new job has been posted:<br><br>Company: ${company}<br>Title: ${job_title}<br>Location: ${location}<br>Description: ${description}`;
+  
+        await Promise.all(emails.map(email => sendEmail(email, subject, html)));
+  
+        return res.json({ message: 'New job added successfully and emails sent', jobId: result.insertId });
+      } catch (error) {
+        console.error('Error fetching emails or sending email:', error);
+        if (error.code === 'ENOTFOUND' || error.code === 'EAI_AGAIN') {
+          return res.status(500).json({ error: 'Network Error: Unable to send emails' });
+        } else {
+          return res.status(500).json({ error: 'Error sending emails' });
+        }
+      }
+    });
+  });
 
 export { router as adminRouter }
